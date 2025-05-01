@@ -178,3 +178,6 @@ output/
 !output/.gitkeep
 
 .DS_Store
+
+day_intervals_cohort.py
+mainPipeline.ipynb
