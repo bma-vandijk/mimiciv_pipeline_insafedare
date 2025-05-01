@@ -11,10 +11,18 @@ from typing import Optional, Tuple, List
 import pandas as pd
 import numpy as np
 
+# Constants
+GROUP_COL = 'subject_id' # Identifier for patients
+VISIT_COL = 'hadm_id' # Identifier for visits
+ADMIT_COL = 'admittime' # Admission time
+DISCH_COL = 'dischtime' # Discharge time
+DISEASE_LABEL = 'N18' # or I50 = Heart Failure, # I25 = Coronary Artery Disease, # N18 = Chronic Kidney Disease, # J44 = Chronic obstructive pulmonary disease
+VERSION = '1.0' # MIMIC-IV version 1.0 or 2.0
+
 # Paths to MIMIC-IV data files
-PATH_ADMISSIONS: str = os.path.join("mimiciv", "1.0", "core", "admissions.csv.gz")
-PATH_DIAGNOSES_ICD: str = os.path.join("mimiciv", "1.0", "hosp", "diagnoses_icd.csv.gz")
-PATH_PATIENTS: str = os.path.join("mimiciv", "1.0", "core", "patients.csv.gz")
+PATH_ADMISSIONS: str = os.path.join("mimiciv", VERSION, "core", "admissions.csv.gz")
+PATH_DIAGNOSES_ICD: str = os.path.join("mimiciv", VERSION, "hosp", "diagnoses_icd.csv.gz")
+PATH_PATIENTS: str = os.path.join("mimiciv", VERSION, "core", "patients.csv.gz")
 PATH_ICD_MAP: str = os.path.join("utils", "ICD9_to_ICD10_mapping.txt")
 
 
