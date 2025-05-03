@@ -17,7 +17,7 @@ VISIT_COL = 'hadm_id' # Identifier for visits
 ADMIT_COL = 'admittime' # Admission time
 DISCH_COL = 'dischtime' # Discharge time
 DISEASE_LABEL = 'N18' # or I50 = Heart Failure, # I25 = Coronary Artery Disease, # N18 = Chronic Kidney Disease, # J44 = Chronic obstructive pulmonary disease
-VERSION = '1.0' # MIMIC-IV version 1.0 or 2.0
+VERSION = '2.0' # MIMIC-IV version 1.0 or 2.0
 
 # Paths to MIMIC-IV data files
 PATH_ADMISSIONS: str = os.path.join("mimiciv", VERSION, "core", "admissions.csv.gz")
