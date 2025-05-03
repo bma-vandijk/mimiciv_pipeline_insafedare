@@ -18,6 +18,20 @@ PATH_ADMISSIONS: str = os.path.join("mimiciv", VERSION, "core", "admissions.csv.
 PATH_DIAGNOSES_ICD: str = os.path.join("mimiciv", VERSION, "hosp", "diagnoses_icd.csv.gz")
 PATH_PATIENTS: str = os.path.join("mimiciv", VERSION, "core", "patients.csv.gz")
 PATH_ICD_MAP: str = os.path.join("utils", "ICD9_to_ICD10_mapping.txt")
+PATH_OMR: str = os.path.join("mimiciv", VERSION, "hosp", "omr.csv.gz")
+PATH_PRESCRIPTIONS: str = os.path.join("mimiciv", VERSION, "hosp", "prescriptions.csv.gz")
+
+# Pre-loading some dfs for row-based feature operations
+omr = pd.read_csv(PATH_OMR)
+pres_df = pd.read_csv(PATH_PRESCRIPTIONS, compression="gzip", header=0)
+# First, filter OMR to only include BMI measurements, convert dates to datetime
+bmi_omr = omr[omr['result_name'] == 'BMI (kg/m2)']
+bmi_omr['chartdate'] = pd.to_datetime(bmi_omr['chartdate'])
+
+# Blood pressure
+# First, filter OMR to only include blood pressure measurements, convert dates to datetime
+bp_omr = omr[omr['result_name'] == 'Blood Pressure']
+bp_omr['chartdate'] = pd.to_datetime(bp_omr['chartdate'])
 
 
 def get_patient_df(
@@ -65,14 +79,15 @@ def get_patient_df(
     visit_pts = visit_df[[
         group_col, visit_col, admit_col, disch_col, 'los', 'los_hours',
         'admission_type', 'admission_location', 'discharge_location',
-        'insurance', 'ethnicity', 'marital_status'
+        'insurance', 'ethnicity', 'marital_status', 'hospital_expire_flag',
     ]].merge(
         pts[[group_col, 'anchor_year', 'anchor_age', 'yob', 'min_valid_year', 'dod', 'gender']],
         how='inner',
         left_on=group_col,
-        right_on=group_col
+        right_on=group_col,
     )
 
+    #visit_pts = visit_pts.merge(visit_df[['hadm_id', 'hospital_expire_flag']], how='left', on='hadm_id')
 
     # Filter for adult patients and valid years
     visit_pts['age'] = visit_pts['anchor_age']
@@ -284,3 +299,8 @@ def find_closest_bp_diastolic(row):
     systolic, diastolic = map(int, bp.split('/'))
 
     return diastolic
+
+def get_med_prescs(row):
+    # Get all medications for a pa in a specific hospital admission
+    return len(pres_df[pres_df['hadm_id'] == row['hadm_id']]) 
+    

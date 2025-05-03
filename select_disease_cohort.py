@@ -29,7 +29,8 @@ PATH_ICD_MAP: str = os.path.join("utils", "ICD9_to_ICD10_mapping.txt")
 def get_admissions_df(
     path_admissions_df: str = PATH_ADMISSIONS,
     admit_col: str = 'admittime',
-    disch_col: str = 'dischtime'
+    disch_col: str = 'dischtime',
+    filter_deaths: bool = True
 ) -> pd.DataFrame:
     """Load and process admissions data from MIMIC-IV.
     
@@ -57,7 +58,8 @@ def get_admissions_df(
     visit['los_hours'] = visit['los_hours'].apply(lambda x: int(x + 0.5))  # Round up if more than 0.5
 
     # Remove hospitalizations with death
-    visit = visit.loc[visit.hospital_expire_flag == 0]
+    if filter_deaths:
+        visit = visit.loc[visit.hospital_expire_flag == 0]
 
     return visit
 
@@ -154,7 +156,8 @@ def standardize_icd(
 
 def standardize_codes_and_select_cohort(
     disease_label: str = 'I50',
-    path_admissions_df: str = PATH_ADMISSIONS
+    path_admissions_df: str = PATH_ADMISSIONS,
+    filter_deaths: bool = True
 ) -> pd.DataFrame:
     """Select patient cohort based on specific disease code.
     
@@ -167,7 +170,7 @@ def standardize_codes_and_select_cohort(
     """
     diag_df = get_diagnosis_icd_df()
     mapping_df = read_icd_mapping_df()
-    visit = get_admissions_df(path_admissions_df)
+    visit = get_admissions_df(path_admissions_df,filter_deaths=filter_deaths)
 
     standardize_icd(mapping_df, diag_df, root=True)
 
