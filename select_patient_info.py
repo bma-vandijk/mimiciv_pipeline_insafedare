@@ -4,10 +4,11 @@ This module provides functionality to:
 - Process patient demographic and visit information
 - Identify and label readmission cases based on specified time gaps
 - Get comorbidities for each visit
+- Extract vital signs and medication information
 """
 
 import os
-from typing import Tuple, Optional, List
+from typing import Tuple, Optional, List, Dict, Any
 import pandas as pd
 import datetime
 from tqdm import tqdm
@@ -21,20 +22,20 @@ PATH_ICD_MAP: str = os.path.join("utils", "ICD9_to_ICD10_mapping.txt")
 PATH_OMR: str = os.path.join("mimiciv", VERSION, "hosp", "omr.csv.gz")
 PATH_PRESCRIPTIONS: str = os.path.join("mimiciv", VERSION, "hosp", "prescriptions.csv.gz")
 
-# Pre-loading some dfs for row-based feature operations
-omr = pd.read_csv(PATH_OMR)
-pres_df = pd.read_csv(PATH_PRESCRIPTIONS, compression="gzip", header=0)
-# First, filter OMR to only include BMI measurements, convert dates to datetime
-bmi_omr = omr[omr['result_name'] == 'BMI (kg/m2)']
+# Pre-loading dataframes for row-based feature operations
+omr: pd.DataFrame = pd.read_csv(PATH_OMR)
+pres_df: pd.DataFrame = pd.read_csv(PATH_PRESCRIPTIONS, compression="gzip", header=0)
+
+# Filter OMR to only include BMI measurements and convert dates to datetime
+bmi_omr: pd.DataFrame = omr[omr['result_name'] == 'BMI (kg/m2)'].copy()
 bmi_omr['chartdate'] = pd.to_datetime(bmi_omr['chartdate'])
 
-# Blood pressure
-# First, filter OMR to only include blood pressure measurements, convert dates to datetime
-bp_omr = omr[omr['result_name'] == 'Blood Pressure']
+# Filter OMR to only include blood pressure measurements and convert dates to datetime
+bp_omr: pd.DataFrame = omr[omr['result_name'] == 'Blood Pressure'].copy()
 bp_omr['chartdate'] = pd.to_datetime(bp_omr['chartdate'])
 
 
-def get_patient_df(
+def get_patient_df_info(
     path_patients_df: str = PATH_PATIENTS,
     visit_df: Optional[pd.DataFrame] = None,
     group_col: str = 'subject_id',
@@ -52,15 +53,19 @@ def get_patient_df(
         visit_col: Column name for visit identifier
         admit_col: Column name for admission time
         disch_col: Column name for discharge time
+        version: Version of the MIMIC-IV dataset
         
     Returns:
         DataFrame containing merged patient and visit information for adult patients
+        
+    Raises:
+        ValueError: If visit_df is None
     """
     if visit_df is None:
         raise ValueError("visit_df cannot be None")
         
     # Read patient demographic data
-    pts = pd.read_csv(
+    pts: pd.DataFrame = pd.read_csv(
         path_patients_df,
         compression='gzip',
         header=0,
@@ -76,7 +81,7 @@ def get_patient_df(
     if version == '2.0':
         visit_df = visit_df.rename(columns={"race": "ethnicity"})
     
-    visit_pts = visit_df[[
+    visit_pts: pd.DataFrame = visit_df[[
         group_col, visit_col, admit_col, disch_col, 'los', 'los_hours',
         'admission_type', 'admission_location', 'discharge_location',
         'insurance', 'ethnicity', 'marital_status', 'hospital_expire_flag',
@@ -87,14 +92,13 @@ def get_patient_df(
         right_on=group_col,
     )
 
-    #visit_pts = visit_pts.merge(visit_df[['hadm_id', 'hospital_expire_flag']], how='left', on='hadm_id')
-
     # Filter for adult patients and valid years
     visit_pts['age'] = visit_pts['anchor_age']
     visit_pts = visit_pts.loc[visit_pts['age'] >= 18]
     visit_pts = visit_pts.dropna(subset=['min_valid_year'])
 
     return visit_pts
+
 
 def partition_by_readmit(
     df: pd.DataFrame,
@@ -103,7 +107,7 @@ def partition_by_readmit(
     visit_col: str,
     admit_col: str,
     disch_col: str
-) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Label visits based on readmission status within a specified time gap.
     
     For each visit, determines if a readmission occurred within the specified gap period.
@@ -122,142 +126,65 @@ def partition_by_readmit(
         - DataFrame of visits with readmissions (case)
         - DataFrame of visits without readmissions (control)
         - DataFrame of invalid visits
+        - DataFrame of redundant visits (subsequent visits)
     """
-    case = pd.DataFrame()   # Visits with readmission within gap period
-    ctrl = pd.DataFrame()   # Visits without readmission within gap period
-    invalid = pd.DataFrame()    # Visits not considered in cohort
-    red = pd.DataFrame()    # Readmissions from a single patient are thrown out, we're only interested in being readmitted or not in 30 days
+    case: pd.DataFrame = pd.DataFrame()   # Visits with readmission within gap period
+    ctrl: pd.DataFrame = pd.DataFrame()   # Visits without readmission within gap period
+    invalid: pd.DataFrame = pd.DataFrame()    # Visits not considered in cohort
+    red: pd.DataFrame = pd.DataFrame()    # Redundant visits (subsequent visits)
 
     # Process visits grouped by patient, sorted by admission time
     grouped = df.sort_values(by=[group_col, admit_col]).groupby(group_col)
     
     for subject, group in tqdm(grouped):
-        #print(group)
-        #print('='*100)
-        #print(group.shape)
-        #print('='*100)
-        #print(group.iloc[0])
-        #print('='*100)
-        #print(group.shape[0]-1)
-        #print('='*100)
         if group.shape[0] <= 1:
             # Single visit - no readmission possible
             ctrl = pd.concat([ctrl, group.iloc[0]], axis=1)
-            #print("To CTRL")
         else:
             for idx in range(group.shape[0]-1):
-                #print(idx)
                 discharge_time = group.iloc[idx][disch_col]
-                #print(discharge_time)
-                #print('='*100)
+                
                 # Check for readmissions within gap period
-                #print(group.loc[
-                #    (group[admit_col] > discharge_time) &
-                #    (group[admit_col] - discharge_time <= gap)
-                #])#.shape[0] >= 1
-                #print('='*100)
                 has_readmission = group.loc[
                     (group[admit_col] > discharge_time) &
                     (group[admit_col] - discharge_time <= gap)
                 ].shape[0] >= 1
-                #print(has_readmission)
-                #print('='*100)
-                if has_readmission and idx==0:
+                
+                if has_readmission and idx == 0:
                     case = pd.concat([case, group.iloc[idx]], axis=1)
-                    #print('**'*100)
-                    #print("To CASE")
-                    #print(group.iloc[idx])
-                    #print('**'*100)
-                elif has_readmission == False and idx==0:
+                elif not has_readmission and idx == 0:
                     ctrl = pd.concat([ctrl, group.iloc[idx]], axis=1)
-                    #print('**'*100)
-                    #print("To CTRL")
-                    #print(group.iloc[idx])
-                    #print('**'*100)
                 else:
                     red = pd.concat([red, group.iloc[idx]], axis=1)
-                    #print('**'*100)
-                    #print("To REDUNDANT")
-                    #print(group.iloc[idx])
-                    #print('**'*100)
-            
-            # Last visit cannot have readmission
-            #ctrl = pd.concat([ctrl, group.iloc[-1]], axis=1)
 
     print("[ READMISSION LABELS FINISHED ]")
     return case.T, ctrl.T, invalid.T, red.T
 
-# def partition_by_readmit(
-#     df: pd.DataFrame,
-#     gap: datetime.timedelta,
-#     group_col: str,
-#     visit_col: str,
-#     admit_col: str,
-#     disch_col: str
-# ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-#     """Label visits based on readmission status within a specified time gap.
+
+def get_comorbidities(diag: pd.DataFrame, visits: pd.DataFrame) -> pd.DataFrame:
+    """Calculate the number of comorbidities for each visit.
     
-#     For each visit, determines if a readmission occurred within the specified gap period.
-#     The gap window starts from the discharge time and considers subsequent admission times.
-    
-#     Args:
-#         df: DataFrame containing visit information
-#         gap: Time period to consider for readmission
-#         group_col: Column name for patient identifier
-#         visit_col: Column name for visit identifier
-#         admit_col: Column name for admission time
-#         disch_col: Column name for discharge time
+    Args:
+        diag: DataFrame containing diagnosis information
+        visits: DataFrame containing visit information
         
-#     Returns:
-#         Tuple containing:
-#         - DataFrame of visits with readmissions (case)
-#         - DataFrame of visits without readmissions (control)
-#         - DataFrame of invalid visits
-#     """
-#     case = pd.DataFrame()   # Visits with readmission within gap period
-#     ctrl = pd.DataFrame()   # Visits without readmission within gap period
-#     invalid = pd.DataFrame()    # Visits not considered in cohort
-
-#     # Process visits grouped by patient, sorted by admission time
-#     grouped = df.sort_values(by=[group_col, admit_col]).groupby(group_col)
-    
-#     for subject, group in tqdm(grouped):
-#         if group.shape[0] <= 1:
-#             # Single visit - no readmission possible
-#             ctrl = pd.concat([ctrl, group.iloc[0]], axis=1)
-#         else:
-#             for idx in range(group.shape[0]-1):
-#                 visit_time = group.iloc[idx][disch_col]
-                
-#                 # Check for readmissions within gap period
-#                 has_readmission = group.loc[
-#                     (group[admit_col] > visit_time) &
-#                     (group[admit_col] - visit_time <= gap)
-#                 ].shape[0] >= 1
-                
-#                 if has_readmission:
-#                     case = pd.concat([case, group.iloc[idx]], axis=1)
-#                 else:
-#                     ctrl = pd.concat([ctrl, group.iloc[idx]], axis=1)
-            
-#             # Last visit cannot have readmission
-#             ctrl = pd.concat([ctrl, group.iloc[-1]], axis=1)
-
-#     print("[ READMISSION LABELS FINISHED ]")
-#     return case.T, ctrl.T, invalid.T
-
-def get_comorbidities(diag,visits):
-
+    Returns:
+        DataFrame with added comorbidity count column
+    """
     diag = diag.groupby('hadm_id').count()['seq_num']
+    visits['comorbs'] = [int(diag[v]) for v in visits['hadm_id'].values]
+    return visits
 
-    col = [int(diag[v]) for v in visits['hadm_id'].values]
 
-    visits['comorbs'] = col
-
-    return visits     
-
-def find_closest_bmi(row):
+def find_closest_bmi(row: pd.Series) -> Optional[float]:
+    """Find the closest BMI measurement to the admission time.
     
+    Args:
+        row: Series containing patient and admission information
+        
+    Returns:
+        Closest BMI value or None if no measurements found
+    """
     patient_bmi = bmi_omr[bmi_omr['subject_id'] == row['subject_id']]
     
     if patient_bmi.empty:
@@ -266,10 +193,18 @@ def find_closest_bmi(row):
     time_diff = abs(patient_bmi['chartdate'] - row['admittime'])
     closest_idx = time_diff.idxmin()
     
-    return patient_bmi.loc[closest_idx, 'result_value']
+    return float(patient_bmi.loc[closest_idx, 'result_value'])
 
-def find_closest_bp_systolic(row):
+
+def find_closest_bp_systolic(row: pd.Series) -> Optional[int]:
+    """Find the closest systolic blood pressure measurement to the admission time.
     
+    Args:
+        row: Series containing patient and admission information
+        
+    Returns:
+        Closest systolic blood pressure value or None if no measurements found
+    """
     patient_bp = bp_omr[bp_omr['subject_id'] == row['subject_id']]
     
     if patient_bp.empty:
@@ -279,13 +214,20 @@ def find_closest_bp_systolic(row):
     closest_idx = time_diff.idxmin()
     
     bp = patient_bp.loc[closest_idx, 'result_value']
-
-    systolic, diastolic = map(int, bp.split('/'))
+    systolic, _ = map(int, bp.split('/'))
 
     return systolic
 
-def find_closest_bp_diastolic(row):
+
+def find_closest_bp_diastolic(row: pd.Series) -> Optional[int]:
+    """Find the closest diastolic blood pressure measurement to the admission time.
     
+    Args:
+        row: Series containing patient and admission information
+        
+    Returns:
+        Closest diastolic blood pressure value or None if no measurements found
+    """
     patient_bp = bp_omr[bp_omr['subject_id'] == row['subject_id']]
     
     if patient_bp.empty:
@@ -295,12 +237,19 @@ def find_closest_bp_diastolic(row):
     closest_idx = time_diff.idxmin()
     
     bp = patient_bp.loc[closest_idx, 'result_value']
-
-    systolic, diastolic = map(int, bp.split('/'))
+    _, diastolic = map(int, bp.split('/'))
 
     return diastolic
 
-def get_med_prescs(row):
-    # Get all medications for a pa in a specific hospital admission
+
+def get_med_prescs(row: pd.Series) -> int:
+    """Get the number of medication prescriptions for a specific hospital admission.
+    
+    Args:
+        row: Series containing hospital admission information
+        
+    Returns:
+        Number of medication prescriptions
+    """
     return len(pres_df[pres_df['hadm_id'] == row['hadm_id']]) 
     
