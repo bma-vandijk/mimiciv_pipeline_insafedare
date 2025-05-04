@@ -92,6 +92,9 @@ def get_patient_df_info(
         right_on=group_col,
     )
 
+    # Clunky hack for not being able to include hospital_expire_flag in visit_pts earlier
+    #visit_pts = visit_pts.merge(visit_df[['hadm_id', 'hospital_expire_flag']], how='left', on='hadm_id')
+
     # Filter for adult patients and valid years
     visit_pts['age'] = visit_pts['anchor_age']
     visit_pts = visit_pts.loc[visit_pts['age'] >= 18]
@@ -157,6 +160,10 @@ def partition_by_readmit(
                 else:
                     red = pd.concat([red, group.iloc[idx]], axis=1)
 
+            
+            # Last visit cannot have readmission
+            #ctrl = pd.concat([ctrl, group.iloc[-1]], axis=1)
+
     print("[ READMISSION LABELS FINISHED ]")
     return case.T, ctrl.T, invalid.T, red.T
 
@@ -193,7 +200,7 @@ def find_closest_bmi(row: pd.Series) -> Optional[float]:
     time_diff = abs(patient_bmi['chartdate'] - row['admittime'])
     closest_idx = time_diff.idxmin()
     
-    return float(patient_bmi.loc[closest_idx, 'result_value'])
+    return patient_bmi.loc[closest_idx, 'result_value']
 
 
 def find_closest_bp_systolic(row: pd.Series) -> Optional[int]:
