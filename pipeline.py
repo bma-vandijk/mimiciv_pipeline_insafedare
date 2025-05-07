@@ -2,7 +2,8 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.utils import all_estimators
-from sklearn.metrics import roc_auc_score
+from sklearn.metrics import roc_auc_score, root_mean_squared_error
+from sklearn.base import is_classifier, is_regressor
 
 
 def _standardize(input_path: str, output_path: str, columns: list):
@@ -29,6 +30,7 @@ def _ml_experiment(
 ):
     """
     Performs an ML experiment using a prediction model from sklearn.
+    Provides ROCAUC for classification, RMSE for regression.
     """
 
     train = pd.read_parquet(input_path)
@@ -42,10 +44,17 @@ def _ml_experiment(
     model = model(**model_hparams)
 
     model.fit(X_tr, y_tr)
-    preds = model.predict_proba(X_te)
-
-    score = roc_auc_score(y_te, preds[:, 1])
-    score = pd.DataFrame([score], columns=["Score"])
+    if is_classifier(model):
+        preds = model.predict_proba(X_te)
+        if y_tr.nunique() == 2:
+            score = roc_auc_score(y_te, preds[:, 1])
+        else:
+            score = roc_auc_score(y_te, preds, multi_class="ovr", average="micro")
+        score = pd.DataFrame([score], columns=["ROCAUC"])
+    elif is_regressor(model):
+        preds = model.predict(X_te)
+        score = root_mean_squared_error(y_te, preds)
+        score = pd.DataFrame([score], columns=["RMSE"])
     score.to_parquet(output_path)
 
 
