@@ -179,7 +179,7 @@ output/
 !output/.gitkeep
 
 .DS_Store
-
+volume_mount/
 day_intervals_cohort.py
 mainPipeline.ipynb
 feature_selection_hosp.py
