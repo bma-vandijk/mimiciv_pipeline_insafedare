@@ -175,6 +175,7 @@ cython_debug/
 .pypirc
 
 mimiciv/
+!mimiciv/.gitkeep
 output/
 !output/.gitkeep
 

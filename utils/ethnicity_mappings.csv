@@ -1,0 +1,7 @@
+mimic_value,omop_concept_id,omop_concept_name
+HISPANIC/LATINO,38003563,Hispanic or Latino
+HISPANIC/LATINO - DOMINICAN,38003563,Hispanic or Latino
+HISPANIC/LATINO - PUERTO RICAN,38003563,Hispanic or Latino
+HISPANIC/LATINO - COLUMBIAN,38003563,Hispanic or Latino
+NOT HISPANIC/LATINO,38003564,Not Hispanic or Latino
+UNKNOWN,0,Unknown 
