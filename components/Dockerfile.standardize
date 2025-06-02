@@ -1,0 +1,6 @@
+FROM python:3.12
+ENV PYTHONUNBUFFERED=1
+RUN pip install --no-cache-dir pandas pyarrow scikit-learn
+WORKDIR /app
+COPY standardize.py /app/standardize.py
+ENTRYPOINT ["python", "standardize.py"] 

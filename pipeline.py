@@ -55,6 +55,7 @@ def _ml_experiment(
         preds = model.predict(X_te)
         score = root_mean_squared_error(y_te, preds)
         score = pd.DataFrame([score], columns=["RMSE"])
+    
     score.to_parquet(output_path)
 
 

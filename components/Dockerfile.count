@@ -1,0 +1,6 @@
+FROM python:3.12
+ENV PYTHONUNBUFFERED=1
+RUN pip install --no-cache-dir pandas pyarrow
+WORKDIR /app
+COPY count.py /app/count.py
+ENTRYPOINT ["python", "count.py"] 

@@ -1,0 +1,6 @@
+FROM python:3.12
+ENV PYTHONUNBUFFERED=1
+RUN pip install --no-cache-dir pandas pyarrow
+WORKDIR /app
+COPY expand_feature.py /app/expand_feature.py
+ENTRYPOINT ["python", "expand_feature.py"] 

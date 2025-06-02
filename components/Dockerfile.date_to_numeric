@@ -1,0 +1,6 @@
+FROM python:3.12
+ENV PYTHONUNBUFFERED=1
+RUN pip install --no-cache-dir pandas pyarrow
+WORKDIR /app
+COPY date_to_numeric.py /app/date_to_numeric.py
+ENTRYPOINT ["python", "date_to_numeric.py"] 

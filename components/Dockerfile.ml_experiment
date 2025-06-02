@@ -1,0 +1,6 @@
+FROM python:3.12
+ENV PYTHONUNBUFFERED=1
+RUN pip install --no-cache-dir pandas pyarrow scikit-learn
+WORKDIR /app
+COPY ml_experiment.py /app/ml_experiment.py
+ENTRYPOINT ["python", "ml_experiment.py"] 

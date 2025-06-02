@@ -1,0 +1,6 @@
+FROM python:3.12
+ENV PYTHONUNBUFFERED=1
+RUN pip install --no-cache-dir pandas pyarrow
+WORKDIR /app
+COPY drop_nan.py /app/drop_nan.py
+ENTRYPOINT ["python", "drop_nan.py"] 

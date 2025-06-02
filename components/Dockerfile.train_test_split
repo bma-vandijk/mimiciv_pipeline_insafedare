@@ -1,0 +1,6 @@
+FROM python:3.12
+ENV PYTHONUNBUFFERED=1
+RUN pip install --no-cache-dir pandas pyarrow scikit-learn
+WORKDIR /app
+COPY train_test_split.py /app/train_test_split.py
+ENTRYPOINT ["python", "train_test_split.py"] 
